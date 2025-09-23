@@ -1,0 +1,280 @@
+#_______________________________________________________1st question________
+1. create vm using count
+#varibles.tf
+variable "project_id" {
+    type = string
+}
+variable "region" {
+    type = string
+  
+}
+variable "machine_type" {
+  type = string
+}
+
+
+
+# Provider block
+provider "google" {
+  project = var.project_id # replace with your GCP project ID
+  region  = var.region
+  
+}
+
+# Create multiple instances using count
+resource "google_compute_instance" "vm" {
+  count        = 3                        # number of VMs
+  name         = "vm-${count.index + 1}"  # vm-1, vm-2, vm-3
+  machine_type = var.machine_type
+  zone         = "asia-south1-c"
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-11"
+    }
+  }
+
+  network_interface {
+    network = "default"
+    access_config {}
+  }
+}
+
+
+#_______________________________________2nd question______________________________________
+2. Create a Cloud Storage bucket, push a local file into it and make show all files must access.
+
+provider "google" {
+    project = "terraform-project-470306"
+    region = "us-central1"
+}
+
+
+#CREATE A BUCKET
+
+resource "google_storage_bucket" "first_bucket" {
+    name = "terraform-project-470306-bucket"
+    location = "US"
+}
+
+#upload local file file create first in left side raghu.txt
+
+resource "google_storage_bucket_object" "onefile" {
+    name = "raghu.txt"
+    bucket = google_storage_bucket.first_bucket.name
+    source = "raghu.txt"
+}
+
+#make object or is a public
+resource "google_storage_bucket_iam_member" "allusers" {
+    bucket = google_storage_bucket.first_bucket.name
+    role = "roles/storage.objectViewer"
+    member = "allUsers"
+
+  
+}
+
+# particular person 
+# resource "google_storage_bucket_iam_member" "bombard-rakesh" {
+#   bucket = google_storage_bucket.my_bucket.name
+#   role   = "roles/storage.objectViewer"
+#   member = "serviceAccount:my-sa@my-project.iam.gserviceaccount.com"
+ }
+#___________________________3rd question________________________________________
+3. Create a VM that must deploy the website at time of creation
+take two files then easy understand one is main.tf and startup.sh
+provider "google" {
+  project = "terraform-project-470306"  # Added closing quote
+  region  = "asia-south1"
+  zone    = "asia-south1-c"
+}
+
+resource "google_compute_instance" "web_vm" {
+  name         = "webserver-vm"
+  machine_type = "e2-medium"
+  zone         = "asia-south1-c"
+
+  boot_disk {
+    initialize_params {
+      image = "ubuntu-os-cloud/ubuntu-2204-lts"
+    }
+  }
+
+  network_interface {
+    network = "default"
+
+    access_config {
+      # external IP
+    }
+  }
+    
+  # Read script from file
+  metadata_startup_script = file("${path.module}/startup.sh")
+
+  tags = ["http-server"]
+}
+
+resource "google_compute_firewall" "default-allow-http" {
+  name    = "allow-http"
+  network = "default"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
+  }
+
+  target_tags = ["http-server"]
+  source_ranges = [ "0.0.0.0/0" ]
+}
+
+
+
+#___________________________________________4th question__________________________________
+4.Create a custom VPC and firewall rule, then attach to a VM.
+provider "google" {
+  project = "your-project-id"
+  region  = "asia-south1"
+  zone    = "asia-south1-c"
+}
+
+# 1. Create a custom VPC
+resource "google_compute_network" "custom_vpc" {
+  name                    = "my-custom-vpc"
+  auto_create_subnetworks = false   # we will create our own subnet
+}
+
+# 2. Create a subnet inside custom VPC
+resource "google_compute_subnetwork" "custom_subnet" {
+  name          = "my-custom-subnet"
+  ip_cidr_range = "10.0.0.0/24"
+  region        = "asia-south1"
+  network       = google_compute_network.custom_vpc.id
+}
+
+# 3. Firewall rule (allow SSH + HTTP)
+resource "google_compute_firewall" "allow-http-ssh" {
+  name    = "allow-http-ssh"
+  network = google_compute_network.custom_vpc.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22", "80"]
+  }
+
+  target_tags = ["web-vm"]
+}
+
+# 4. VM attached to custom VPC
+resource "google_compute_instance" "web_vm" {
+  name         = "custom-vpc-vm"
+  machine_type = "e2-medium"
+  zone         = "asia-south1-c"
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-11"
+    }
+  }
+
+  network_interface {
+    network    = google_compute_network.custom_vpc.id
+    subnetwork = google_compute_subnetwork.custom_subnet.id
+
+    access_config {}  # gives external IP
+  }
+
+  tags = ["web-vm"]
+
+  metadata_startup_script = <<-EOT
+    #!/bin/bash
+    apt-get update -y
+    apt-get install -y apache2
+    systemctl start apache2
+    echo "<h1>Hello from VM in custom VPC 🚀</h1>" > /var/www/html/index.html
+  EOT
+}
+
+
+#________________________________6th question___________________________________________________
+# two vm in different project 
+# ---------------------------
+# Provider for Project 1
+# ---------------------------
+provider "google" {
+  alias   = "project1"
+  project = "PROJECT_ID_1"      # Replace with your first project ID
+  region  = "us-central1"
+}
+
+# ---------------------------
+# Provider for Project 2
+# ---------------------------
+provider "google" {
+  alias   = "project2"
+  project = "PROJECT_ID_2"      # Replace with your second project ID
+  region  = "us-central1"
+}
+
+# ---------------------------
+# VM in Project 1
+# ---------------------------
+resource "google_compute_instance" "vm1" {
+  provider     = google.project1
+  name         = "vm-project1"
+  zone         = "us-central1-a"
+  machine_type = "e2-medium"
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-11"
+    }
+  }
+
+  network_interface {
+    network       = "default"
+    access_config {}
+  }
+}
+
+# ---------------------------
+# VM in Project 2
+# ---------------------------
+resource "google_compute_instance" "vm2" {
+  provider     = google.project2
+  name         = "vm-project2"
+  zone         = "us-central1-b"
+  machine_type = "e2-medium"
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-11"
+    }
+  }
+
+  network_interface {
+    network       = "default"
+    access_config {}
+  }
+}
+
+
+#___________________________________7th question____________________________________________
+
+# How get the state file of existing resource in gcp.
+using import command--i created one bmrd vm in console
+ terraform import google_compute_instance.out projects/terraform-project-470306/zones/us-central1-c/instances/bmrd
+#___________________________________8th question____________________________________________________
+# store statefile in backend (already creted before the bucket in cloud)
+
+terraform {
+   backend "gcs" {
+    bucket      = "dev-payments-bucket"
+   prefix      = "terraform/state"
+    # credentials = "service-account.json" -optional
+   }
+ }
+
+ provider "google" {
+   project = "terraform-project-470306"
+   region  = "us-central1"
+ }
