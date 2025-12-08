@@ -52,7 +52,3 @@ resource "google_compute_firewall" "tf_http7"{
   
 }
 
-resource "google_compute_instance" "out" {
-  name = "bmrd"
-  zone = "us-central1-c"
-}
