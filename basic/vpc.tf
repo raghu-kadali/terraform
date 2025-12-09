@@ -1,5 +1,5 @@
 resource "google_compute_network" "tf_vpc" {
-  name = "vpc1"
+  name = "vpc3"
   
   auto_create_subnetworks = true
   description="creating vpc first time using terraform"
