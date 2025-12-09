@@ -1,56 +1,52 @@
-resource "google_compute_network" "tf_vpc" {
-  name = "vpc3"
+provider "google" {
+    project = "kubernetes-477004"
+    region = "us-central1"
   
-  auto_create_subnetworks = true
-  description="creating vpc first time using terraform"
 }
 
 
-# #crete subnetwork
-# #what we want:
-# #gcloud compute networks subnet subnet create subnetname
-# #region range networkname
+resource "google_compute_instance" "tf_vm1" {
+    name = "harness-vm"
+    zone = "us-central1-c"
+    machine_type = "e2-medium"
+    boot_disk {
+      initialize_params {
+        image = "ubuntu-os-cloud/ubuntu-2204-lts"
+      }
+    }
+    network_interface {
+        network = google_compute_network.tf_net1.id
+        subnetwork = google_compute_subnetwork.tf-subnet1.id
+      access_config {
+        
+      }
+    }
+    metadata_startup_script = file("startup-script.sh")
+}
 
-# resource "google_compute_subnetwork" "tf_subnet" {
-#   name = "subnet1"
-#   #syntax:resourcetype.locl.attribute
-#   network= google_compute_network.tf_vpc.id
-#   # id=actually convert to name
-#   region = "us-central1"
-#   ip_cidr_range = "10.8.0.0/16"
+resource "google_compute_network" "tf_net1" {
+    name = "harness-net"
+    auto_create_subnetworks = false
+}
 
-# }
-  
-# #create firewall 
-# #name,network,port,direction(ingress/egress),source,tags
-# #PRority 0 = most powerful = first rule to respond.
-# # Tags are like labels to filter which VMs the firewall rule should apply because one vpc mutiple vm are there if you give vpc level that applicable one thing what about otehr vm
-# resource "google_compute_firewall" "tf_ssh1" {
-#   name = "firewall-ssh"
-#   network = google_compute_network.tf_vpc.id
-#   direction = "INGRESS"
-#   allow {
-#     ports = ["22"]
-#     protocol = "tcp"
-#   }
-#   priority = 1000
-#    source_ranges=["0.0.0.0/0"]
-#    target_tags = ["ssh-tag"]
-  
-# }
+resource "google_compute_subnetwork" "tf-subnet1" {
+    name = "harness-subnet"
+    network = google_compute_network.tf_net1.id
+    region = "us-central1"
+    ip_cidr_range = "10.0.0.0/24"
+}
 
-# #other firewal
-# resource "google_compute_firewall" "tf_http7"{
-#   name = "firewall-http3"
-#   network = google_compute_network.tf_vpc.id
-#   direction = "INGRESS"
-#   allow {
-#     ports = ["8080"]
-#     protocol = "tcp"
-#   }
-#   priority = 500
-#    source_ranges= ["0.0.0.0/0" ]
-#    target_tags = ["http-tag"]
-  
-# }
+resource "google_compute_firewall" "tf_fir" {
+    name = "allow-ssh-http"
+    direction = "INGRESS"
+    network = google_compute_network.tf_net1.id
+    source_ranges = ["0.0.0.0/0"]
+    allow {
+      protocol = "tcp"  
+      ports = ["22","80"]
+    }
+}
 
+output "harness_vm_ip" {
+  value = google_compute_instance.tf_vm1.network_interface[0].access_config[0].nat_ip
+}
